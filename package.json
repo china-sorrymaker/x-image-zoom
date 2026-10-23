@@ -1,0 +1,14 @@
+{
+  "name": "x-image-zoom",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zoom and pan X / Twitter images, with fit-to-width reading for tall images.",
+  "license": "MIT",
+  "scripts": {
+    "check": "node --check content.js",
+    "test": "node tests/browser-smoke.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}
