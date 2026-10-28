@@ -3,7 +3,7 @@
 
   const marker = "data-x-image-zoom-extension";
   if (document.documentElement.hasAttribute(marker)) return;
-  document.documentElement.setAttribute(marker, "1.1.0");
+  document.documentElement.setAttribute(marker, "1.1.1");
 
   let active = null;
   let drag = null;
@@ -26,7 +26,7 @@
     if (!(target instanceof Element) || target.closest('button, a, article, video')) return null;
     const viewer = target.closest('[role="dialog"]');
     if (!viewer) return null;
-    const direct = target.closest("img") || target.closest('[data-testid="tweetPhoto"]')?.querySelector("img");
+    const direct = target.closest("img") || target.closest('[role="img"], [data-testid="tweetPhoto"]')?.querySelector("img");
     if (isPhoto(direct) && !direct.closest("article")) return direct;
     if (target.closest('[role="button"]')) return null;
     // X 可能在图片前铺透明手势层，按鼠标位置找它下面已显示的照片。
@@ -42,6 +42,12 @@
     return `${image.currentSrc}|${image.getAttribute("src")}|${image.getAttribute("srcset")}`;
   }
 
+  function surfaceFor(image) {
+    // X 使用 role=img 容器的背景层显示照片，内部的透明 img 只保留图片语义。
+    // 缩放整个图片容器，背景和透明 img 才会一起移动，普通 img 则直接缩放自身。
+    return image.closest('[role="img"]') || image;
+  }
+
   function setStyle(state, element, name, value) {
     state.styles.push({ element, name, value: element.style.getPropertyValue(name),
       priority: element.style.getPropertyPriority(name) });
@@ -55,7 +61,7 @@
     suppressClickUntil = 0;
     suppressClickScope = null;
     state.observer.disconnect();
-    if (drag && state.image.hasPointerCapture(drag.id)) state.image.releasePointerCapture(drag.id);
+    if (drag && state.surface.hasPointerCapture(drag.id)) state.surface.releasePointerCapture(drag.id);
     drag = null;
     for (const saved of state.styles.reverse()) {
       if (saved.value) saved.element.style.setProperty(saved.name, saved.value, saved.priority);
@@ -65,7 +71,7 @@
 
   function valid() {
     if (!active) return false;
-    if (!active.image.isConnected || !active.viewer.isConnected || active.viewer.hidden || active.image.hidden ||
+    if (!active.image.isConnected || !active.surface.isConnected || !active.viewer.isConnected || active.viewer.hidden || active.image.hidden ||
         !active.viewer.getClientRects().length || active.viewer.getAttribute("aria-hidden") === "true" ||
         source(active.image) !== active.source) {
       reset();
@@ -76,12 +82,13 @@
 
   function begin(image) {
     reset();
-    const rect = image.getBoundingClientRect();
+    const surface = surfaceFor(image);
+    const rect = surface.getBoundingClientRect();
     if (!image.complete || !image.naturalWidth || rect.width < 1 || rect.height < 1) return null;
     const viewer = image.closest('[role="dialog"]');
     const stage = image.closest('[data-testid="swipeable-list"]') || viewer;
     const area = stage.getBoundingClientRect();
-    const state = { image, viewer, source: source(image), rect,
+    const state = { image, surface, viewer, source: source(image), rect,
       viewport: { left: Math.max(0, area.left), top: Math.max(0, area.top),
         right: Math.min(innerWidth, area.right), bottom: Math.min(innerHeight, area.bottom) },
       scale: 1, x: 0, y: 0, styles: [] };
@@ -89,10 +96,10 @@
     for (const [name, value] of [["transform-origin", "center"], ["translate", "0px 0px"],
       ["scale", "1"], ["transition", "none"], ["cursor", "grab"],
       ["user-select", "none"], ["touch-action", "none"]]) {
-      setStyle(state, image, name, value);
+      setStyle(state, surface, name, value);
     }
     // 原生看图布局会裁剪子元素；缩放期间解除图片到看图区域之间的裁剪。
-    for (let parent = image.parentElement; parent && parent !== viewer; parent = parent.parentElement) {
+    for (let parent = surface.parentElement; parent && parent !== viewer; parent = parent.parentElement) {
       const style = getComputedStyle(parent);
       if ([style.overflowX, style.overflowY].some(value => value !== "visible")) {
         setStyle(state, parent, "overflow-x", "visible");
@@ -120,8 +127,8 @@
       Math.max(viewport.right - cx - width / 2, Math.min(viewport.left - cx + width / 2, state.x));
     state.y = height <= viewport.bottom - viewport.top ? 0 :
       Math.max(viewport.bottom - cy - height / 2, Math.min(viewport.top - cy + height / 2, state.y));
-    state.image.style.setProperty("translate", `${state.x}px ${state.y}px`, "important");
-    state.image.style.setProperty("scale", `${scale}`, "important");
+    state.surface.style.setProperty("translate", `${state.x}px ${state.y}px`, "important");
+    state.surface.style.setProperty("scale", `${scale}`, "important");
   }
 
   window.addEventListener("wheel", event => {
@@ -151,8 +158,8 @@
     event.stopImmediatePropagation();
     drag = { id: event.pointerId, x: event.clientX, y: event.clientY,
       offsetX: active.x, offsetY: active.y, moved: false };
-    active.image.setPointerCapture(event.pointerId);
-    active.image.style.setProperty("cursor", "grabbing", "important");
+    active.surface.setPointerCapture(event.pointerId);
+    active.surface.style.setProperty("cursor", "grabbing", "important");
   }, true);
 
   window.addEventListener("pointermove", event => {
@@ -176,8 +183,8 @@
         suppressClickUntil = performance.now() + 500;
         suppressClickScope = active.viewer;
       }
-      active.image.style.setProperty("cursor", "grab", "important");
-      if (active.image.hasPointerCapture(event.pointerId)) active.image.releasePointerCapture(event.pointerId);
+      active.surface.style.setProperty("cursor", "grab", "important");
+      if (active.surface.hasPointerCapture(event.pointerId)) active.surface.releasePointerCapture(event.pointerId);
     }
     if (moved) { event.preventDefault(); event.stopImmediatePropagation(); }
   }

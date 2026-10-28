@@ -1,14 +1,16 @@
 # X 图片放大镜
 
-**v1.1.0 · MIT** · [English](#english) · [下载](https://github.com/china-sorrymaker/x-image-zoom/releases/latest)
+**v1.1.1 · MIT** · [English](#english) · [下载](https://github.com/china-sorrymaker/x-image-zoom/releases/latest)
 
 在 X（Twitter）已经打开的大图上，直接用滚轮缩放、按住左键拖动，方便看清长图细节。
 
 **v1.1.0 改为原位缩放：无需点击“放大”，没有额外看图层，不重新加载图片。**
 
+v1.1.1 修复了 X 使用背景层显示图片、内部 `<img>` 透明时滚轮看起来无效的问题，改为缩放实际显示的图片容器。
+
 ## 安装 / 更新
 
-1. 从 [Releases](https://github.com/china-sorrymaker/x-image-zoom/releases/latest) 下载 `x-image-zoom-v1.1.0.zip`，然后解压；也可以直接克隆本仓库。
+1. 从 [Releases](https://github.com/china-sorrymaker/x-image-zoom/releases/latest) 下载 `x-image-zoom-v1.1.1.zip`，然后解压；也可以直接克隆本仓库。
 2. Chrome 打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 3. 开启“开发者模式”，点击“加载已解压的扩展程序”。
 4. 选择包含 `manifest.json` 的解压目录或仓库目录。
@@ -46,7 +48,7 @@ npm test
 
 使用已安装的 Chrome 运行测试时，可通过 `CHROME_PATH` 环境变量指定浏览器可执行文件。
 
-测试使用本地构造的 X 样例页面，所有网络请求由测试响应，不访问真实账号。覆盖即时原位缩放、零新增图片请求、拖拽及误点击抑制、原生裁剪样式恢复、滚轮 / 双击复原、原生切图 / Esc / 关闭、透明手势层、图片源变化、头像 / 评论 / 信息流排除、修饰键、窗口变化和重复注入。它不等于真实 X 页面或扩展安装验收。
+测试使用本地构造的 X 样例页面，所有网络请求由测试响应，不访问真实账号。分别验证普通 `<img>` 和用户 Elements 截图中的“背景层＋透明 `<img>`”结构，覆盖可见层原位缩放和拖拽、零新增图片请求、误点击抑制、原生裁剪样式恢复、滚轮 / 双击复原、原生切图 / Esc / 关闭、透明手势层、图片源变化、头像 / 评论 / 信息流排除、修饰键、窗口变化和重复注入。它不等于真实 X 页面或扩展安装验收。
 
 手动验收：安装并刷新 X → 打开长图 → 鼠标在图上向上滚轮，应立即放大且没有新弹层或加载提示 → 拖动查看 → 向下滚轮或双击复原 → 左右切图、Esc 关闭 → 确认信息流和评论区滚动正常。
 
@@ -55,6 +57,8 @@ npm test
 **X Image Zoom** adds direct wheel zoom and drag-to-pan to X / Twitter's native image viewer, especially for tall images.
 
 **v1.1.0 zooms the existing image in place. No extra button, viewer, or image reload.**
+
+v1.1.1 fixes invisible zoom when X renders a background image with a transparent semantic `<img>`: zoom and pan now target the visible image container.
 
 - Open a photo normally in X's native viewer.
 - Scroll up over the photo to zoom in, and down to zoom out.

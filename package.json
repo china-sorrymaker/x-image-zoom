@@ -1,6 +1,6 @@
 {
   "name": "x-image-zoom",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Zoom and pan existing images directly in the native X / Twitter viewer without reloading.",
   "license": "MIT",
