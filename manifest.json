@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "X 图片放大镜",
-  "version": "1.0.0",
-  "description": "保留 X 原生看图，增加滚轮缩放、拖拽移动和同帖多图切换。",
+  "version": "1.1.0",
+  "description": "直接在 X 原生大图上滚轮缩放、拖拽查看，无额外弹层，无需重新加载图片。",
   "content_scripts": [
     {
       "matches": ["https://x.com/*", "https://*.x.com/*", "https://twitter.com/*", "https://*.twitter.com/*"],

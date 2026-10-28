@@ -1,8 +1,8 @@
 {
   "name": "x-image-zoom",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Zoom and pan X / Twitter images, with fit-to-width reading for tall images.",
+  "description": "Zoom and pan existing images directly in the native X / Twitter viewer without reloading.",
   "license": "MIT",
   "scripts": {
     "check": "node --check content.js",

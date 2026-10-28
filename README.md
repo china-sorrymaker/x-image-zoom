@@ -1,37 +1,37 @@
 # X 图片放大镜
 
-**v1.0.0 · MIT** · [English](#english)
+**v1.1.0 · MIT** · [English](#english) · [下载](https://github.com/china-sorrymaker/x-image-zoom/releases/latest)
 
-在电脑 Chrome / Edge 的 X（Twitter）网页放大帖子图片。解决“点开大图后，长图仍被缩得太小，看不清细节”的问题。
+在 X（Twitter）已经打开的大图上，直接用滚轮缩放、按住左键拖动，方便看清长图细节。
 
-保留 X 原生单击看图，增加滚轮缩放、拖拽移动和长图适应宽度。无需登录插件，无额外 API 权限，不上传数据；图片仍从 X 的图片服务器加载。
+**v1.1.0 改为原位缩放：无需点击“放大”，没有额外看图层，不重新加载图片。**
 
-## 安装
+## 安装 / 更新
 
-1. 从本仓库的 **Releases** 下载 `x-image-zoom-v1.0.0.zip`，然后解压；也可以直接克隆本仓库。
+1. 从 [Releases](https://github.com/china-sorrymaker/x-image-zoom/releases/latest) 下载 `x-image-zoom-v1.1.0.zip`，然后解压；也可以直接克隆本仓库。
 2. Chrome 打开 `chrome://extensions`；Edge 打开 `edge://extensions`。
 3. 开启“开发者模式”，点击“加载已解压的扩展程序”。
-4. 选择解压后的目录或克隆的仓库目录，其中应直接包含 `manifest.json`。
+4. 选择包含 `manifest.json` 的解压目录或仓库目录。
 5. 刷新已经打开的 X 页面。
 
-使用插件无需安装 Node.js 或执行构建。更新时替换文件，在扩展管理页点“重新加载”，然后刷新 X 页面。
+从旧版更新：用新版文件替换原安装目录的文件，在扩展管理页点击该插件的“重新加载”，**再刷新 X 页面**。无需安装 Node.js 或执行构建。
 
-## 使用与手动验收
+## 怎么用
 
-- 帖子图片原来的单击看图功能保留。
-- 鼠标移到帖子图片上，右上角出现“＋ 放大”，点击进入放大镜。
-- 在 X 原生看图层，把鼠标放在图片上滚动滚轮，也可以进入放大镜。
-- 滚轮向上放大、向下缩小，最大为原图的 1200%；按住左键拖拽查看边缘细节。
-- 长图点击“适应宽度”，图片按窗口宽度展开并从顶部显示，再按住左键向上拖动阅读下面内容。
-- 工具栏支持加减、适应窗口、适应宽度、原始大小（100%）、打开原图。
-- 双击切换原始大小与适应窗口；同帖多图用左右按钮或方向键切换。
-- `Esc` / 关闭按钮退出放大镜；从 X 原生看图层进入时，会回到原生看图层。
-- 确认头像、视频、普通页面滚动、X 原有点击行为没有被接管。
-- 持续向下刷出新帖子，再测试“放大”按钮，无需再次刷新。
+1. 像平时一样点击帖子图片，打开 X 原生大图。
+2. 鼠标放在图片上，**滚轮向上放大，向下缩小**，立即生效。
+3. 放大后**按住鼠标左键拖动**，查看长图上下部分或图片边缘。
+4. **双击图片**，或持续向下滚轮，恢复 X 原来的显示大小。
 
-优先加载 X 提供的原图；失败时尝试页面图片。放大无法补回源文件本身不存在的细节。X 改动网页结构后，原生看图层的滚轮入口可能需要适配，此时可使用图片上的“放大”按钮。
+X 原来的左右切图按钮、方向键和 Esc 关闭继续使用；切图和关闭时会清除缩放。普通信息流、评论图片和头像上的滚轮仍按原网页处理，Ctrl / Command + 滚轮保留浏览器行为。
 
-插件只在 `x.com` / `twitter.com` 及其子域运行。代码使用 Chrome Manifest V3 的静态内容脚本机制：[官方文档](https://developer.chrome.com/docs/extensions/reference/manifest/content-scripts)。
+最大缩放为 X 当前显示尺寸的 12 倍。插件直接使用 X 已加载的图片，不请求另一份高清图片；可见细节取决于 X 当前加载的源文件，放大不能补回源文件本身不存在的细节。X 后续调整看图层结构时可能需要适配。
+
+## 隐私与实现
+
+仅在 `x.com` / `twitter.com` 及其子域运行，无额外 API 权限、无统计、无数据上传。插件不修改图片的 `src` / `srcset`，不创建新的图片节点或看图弹层，只临时调整原生图片及裁剪容器的显示样式；恢复大小、切图和关闭时撤销这些样式。
+
+采用 Chrome Manifest V3 静态内容脚本：[官方文档](https://developer.chrome.com/docs/extensions/reference/manifest/content-scripts)。
 
 ## 开发与验证
 
@@ -46,22 +46,25 @@ npm test
 
 使用已安装的 Chrome 运行测试时，可通过 `CHROME_PATH` 环境变量指定浏览器可执行文件。
 
-测试使用本地构造的 X 样例页面，所有请求均由测试响应，不访问真实账号。覆盖原生点击保留、头像排除、原图加载、长图适应宽度及顶部定位、拖拽、滚轮缩放、多图切换、焦点及滚动状态恢复、动态帖子和原图失败回退。它不等于真实 X 页面或扩展安装验收，真实页面请按上面的使用步骤手动验证。
+测试使用本地构造的 X 样例页面，所有网络请求由测试响应，不访问真实账号。覆盖即时原位缩放、零新增图片请求、拖拽及误点击抑制、原生裁剪样式恢复、滚轮 / 双击复原、原生切图 / Esc / 关闭、透明手势层、图片源变化、头像 / 评论 / 信息流排除、修饰键、窗口变化和重复注入。它不等于真实 X 页面或扩展安装验收。
+
+手动验收：安装并刷新 X → 打开长图 → 鼠标在图上向上滚轮，应立即放大且没有新弹层或加载提示 → 拖动查看 → 向下滚轮或双击复原 → 左右切图、Esc 关闭 → 确认信息流和评论区滚动正常。
 
 ## English
 
-**X Image Zoom** is a lightweight Chrome / Edge extension for viewing details in X / Twitter images, especially tall images that remain too small in the native viewer.
+**X Image Zoom** adds direct wheel zoom and drag-to-pan to X / Twitter's native image viewer, especially for tall images.
 
-- Keeps X's normal click-to-view behavior.
-- Hover over a post image and click **＋ 放大**, or scroll over an image in X's native viewer, to open the zoom viewer.
-- Scroll to zoom up to 1200% of the source image; drag with the left mouse button to pan.
-- **适应宽度** fits a tall image to the window width and starts at the top.
-- **适应窗口** fits the whole image; **原始大小** displays it at 100%.
-- Use arrow buttons / keys to switch images, or Esc to close.
-- Requests the original image where available, with a fallback to the page image.
+**v1.1.0 zooms the existing image in place. No extra button, viewer, or image reload.**
 
-Download and extract the ZIP from **Releases**, open `chrome://extensions` or `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the folder containing `manifest.json`. Refresh X after installation. No build step is required.
+- Open a photo normally in X's native viewer.
+- Scroll up over the photo to zoom in, and down to zoom out.
+- Hold the left mouse button and drag to pan.
+- Double-click, or scroll down to the original display size, to reset.
+- Native next / previous controls, arrow keys, and Esc keep working.
+- Zoom is limited to 12 times X's current displayed size. Image details depend on the source X has already loaded.
 
-The extension runs only on X / Twitter domains, has no analytics or data uploads, and loads images from X's image server. The interface is currently in Chinese. Source image resolution and future X layout changes can affect the result.
+Download and extract the ZIP from [Releases](https://github.com/china-sorrymaker/x-image-zoom/releases/latest), open `chrome://extensions` or `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the folder containing `manifest.json`. Refresh X after installation. To update, replace the installed files, reload the extension, and refresh X. No build step is required.
+
+The extension runs only on X / Twitter domains. No extra API permissions, analytics, or uploads. It does not modify image URLs or create additional image elements. Browser smoke tests use a local fixture; live X behavior needs manual verification after installation.
 
 Licensed under [MIT](LICENSE). This is an independent project and is not affiliated with X.
