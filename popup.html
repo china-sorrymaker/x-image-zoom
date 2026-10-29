@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>X 图片放大镜 · 运行状态</title>
+  <style>
+    body { width: 360px; margin: 0; padding: 18px; box-sizing: border-box; background: #111827; color: #e5e7eb; font: 14px/1.6 system-ui, sans-serif; }
+    h1 { margin: 0 0 8px; font-size: 17px; } p { margin: 8px 0; }
+    #summary { padding: 10px; border: 1px solid #475569; border-radius: 8px; }
+    pre { margin: 12px 0; padding: 10px; background: #1e293b; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 system-ui, sans-serif; }
+    button { width: 100%; padding: 8px; border: 0; border-radius: 6px; background: #2563eb; color: white; cursor: pointer; font: inherit; }
+    .hint { color: #aebbd0; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>X 图片放大镜 · 运行状态</h1>
+  <p id="summary" role="status">正在检查当前标签页…</p>
+  <pre id="details"></pre>
+  <button id="refresh" type="button">重新检查</button>
+  <p class="hint">先关闭此面板，在 X 已打开的大图上向上滚轮，再打开此面板查看结果。这里仅显示运行状态，不读取帖子或账号内容。</p>
+  <script src="popup.js"></script>
+</body>
+</html>

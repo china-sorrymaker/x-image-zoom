@@ -10,7 +10,8 @@ const { chromium } = require("playwright");
     headless: true
   });
   try {
-    for (const backgroundMode of [false, true]) {
+    for (const mode of ["img", "background-role", "background-no-role"]) {
+      const backgroundMode = mode !== "img";
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
       page.setDefaultTimeout(8000);
       const errors = [];
@@ -29,7 +30,7 @@ const { chromium } = require("playwright");
           <div id="viewer" role="dialog" style="position:fixed;inset:0;background:#111;color:white;display:flex">
             <div id="stage" data-testid="swipeable-list" style="width:960px;height:900px;display:flex;align-items:center;justify-content:center;overflow:hidden">
               <div id="clip" data-testid="tweetPhoto" style="position:relative;width:100px;height:750px;overflow:hidden">
-                ${backgroundMode ? `<div id="rendered" aria-label="图像" role="img" style="position:relative;width:100px;height:750px;overflow:hidden;cursor:crosshair !important;transform:translateZ(0)">
+                ${backgroundMode ? `<div id="rendered" aria-label="图像" ${mode === "background-role" ? 'role="img"' : ''} style="position:relative;width:100px;height:750px;overflow:hidden;cursor:crosshair !important;transform:translateZ(0)">
                   <div id="background" style="position:absolute;inset:0;background-image:url('https://pbs.twimg.com/media/long?format=jpg&name=large');background-size:contain;background-position:center;background-repeat:no-repeat"></div>
                   <img id="long" src="https://pbs.twimg.com/media/long?format=jpg&name=large" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;z-index:-1">
                 </div>` : '<img id="long" src="https://pbs.twimg.com/media/long?format=jpg&name=large" width="100" height="750" style="cursor:crosshair !important;transform:translateZ(0)">'}
@@ -46,7 +47,11 @@ const { chromium } = require("playwright");
             const img=document.querySelector('#long');const viewer=document.querySelector('#viewer');
             document.querySelector('#clip').addEventListener('click',()=>window.nativeClicks++);
             document.addEventListener('wheel',()=>window.nativeWheels++,{passive:true});
-            document.querySelector('#next').onclick=()=>img.src='https://pbs.twimg.com/media/second?format=jpg&name=large';
+            document.querySelector('#next').onclick=()=>{
+              img.src='https://pbs.twimg.com/media/second?format=jpg&name=large';
+              const background=document.querySelector('#background');
+              if(background) background.style.backgroundImage='url("'+img.src+'")';
+            };
             document.querySelector('#close').onclick=()=>viewer.hidden=true;
             document.addEventListener('keydown',event=>{
               window.nativeKeys++;
@@ -56,7 +61,28 @@ const { chromium } = require("playwright");
       });
       await page.goto("https://x.com/fixture/status/1/photo/1");
       const script = process.env.ZOOM_SCRIPT_PATH || path.resolve(__dirname, "../content.js");
-      await page.addScriptTag({ path: script });
+      // 内容脚本实际运行在 Chrome 隔离环境中，不能只用网页内 script 标签验证。
+      const cdp = await page.context().newCDPSession(page);
+      const { frameTree } = await cdp.send("Page.getFrameTree");
+      const { executionContextId } = await cdp.send("Page.createIsolatedWorld", {
+        frameId: frameTree.frame.id, worldName: "x-image-zoom-test"
+      });
+      async function evaluateIsolated(expression) {
+        const result = await cdp.send("Runtime.evaluate", {
+          expression, contextId: executionContextId, awaitPromise: true, returnByValue: true
+        });
+        if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
+        return result.result.value;
+      }
+      await evaluateIsolated(`globalThis.chrome ??= {};
+        chrome.runtime = { onMessage: { addListener(listener) {
+          globalThis.__readZoomStatus = () => new Promise(resolve => listener({type:'x-image-zoom-status'}, {}, resolve));
+        } } };`);
+      const injectScript = () => evaluateIsolated(fs.readFileSync(script, "utf8"));
+      await injectScript();
+      const initialStatus = await evaluateIsolated("__readZoomStatus()");
+      assert.equal(initialStatus.version, "1.1.2", "diagnostics identifies running script version");
+      assert.equal(initialStatus.wheelCount, 0);
       const image = page.locator("#long");
       const surfaceSelector = backgroundMode ? "#rendered" : "#long";
       const surface = page.locator(surfaceSelector);
@@ -75,6 +101,12 @@ const { chromium } = require("playwright");
       await surface.click();
       assert.equal(await page.evaluate(() => window.nativeClicks), 1, "native click preserved");
       await wheel(-180);
+      const zoomStatus = await evaluateIsolated("__readZoomStatus()");
+      assert.ok(zoomStatus.wheelCount > 0, "diagnostics observes real wheel input across isolated worlds");
+      assert.equal(zoomStatus.active, true);
+      assert.ok(Number(zoomStatus.computedScale) > 1, "diagnostics reports actual computed scale");
+      assert.ok(zoomStatus.renderedWidth > zoomStatus.initialWidth);
+      assert.ok(!JSON.stringify(zoomStatus).includes("https://"), "diagnostics excludes source URLs");
       assert.ok((await surface.boundingBox()).width > 140, "first wheel immediately enlarges visible image surface");
       if (backgroundMode) {
         assert.ok((await page.locator('#background').boundingBox()).width > 140, "actual background image enlarges");
@@ -131,7 +163,11 @@ const { chromium } = require("playwright");
 
       // 原生 React 复用同一个 img 切换 src，观察器也应恢复样式。
       await wheel(-100);
-      await image.evaluate(el => { el.src = 'https://pbs.twimg.com/media/third?name=large'; });
+      await image.evaluate(el => {
+        el.src = 'https://pbs.twimg.com/media/third?name=large';
+        const background=document.querySelector('#background');
+        if(background) background.style.backgroundImage=`url("${el.src}")`;
+      });
       await page.waitForFunction(selector => !document.querySelector(selector).style.scale, surfaceSelector);
       await page.waitForFunction(() => document.querySelector('#long').complete);
 
@@ -160,15 +196,39 @@ const { chromium } = require("playwright");
       await page.setViewportSize({ width: 1280, height: 850 });
       await page.waitForFunction(selector => !document.querySelector(selector).style.scale, surfaceSelector);
       assert.equal(await scale(), 1, "resize restores geometry");
-      await page.addScriptTag({ path: script });
+      await injectScript();
       await wheel(-100);
       assert.ok(await scale() < 1.3, "duplicate injection does not multiply wheel handlers");
       await page.locator('#viewer').evaluate(el => el.remove());
       assert.equal(await page.locator('#x-image-zoom-extension').count(), 0);
       assert.deepEqual(errors, [], "no browser runtime errors");
-      console.log(`PASS (${backgroundMode ? 'X background layer + transparent img' : 'normal img'}): visible zoom and pan, zero reloads/clones/dialogs, clipping restoration, drag click suppression, reset, native controls, source changes, overlay, exclusions, resize, duplicate injection, DOM cleanup.`);
+      console.log(`PASS (${mode}): visible zoom and pan, zero reloads/clones/dialogs, clipping restoration, drag click suppression, reset, native controls, source changes, overlay, exclusions, resize, duplicate injection, DOM cleanup.`);
       await page.close();
     }
+
+    const popup = await browser.newPage();
+    await popup.setContent(fs.readFileSync(path.resolve(__dirname, "../popup.html"), "utf8")
+      .replace('<script src="popup.js"></script>', ""));
+    await popup.evaluate(() => {
+      globalThis.chrome = {
+        runtime: { getManifest: () => ({ version: "1.1.2" }) },
+        tabs: { query: async () => [{ id: 1 }], sendMessage: async () => { throw new Error("No receiver"); } }
+      };
+    });
+    await popup.addScriptTag({ path: path.resolve(__dirname, "../popup.js") });
+    await popup.waitForFunction(() => document.getElementById("summary").textContent.includes("没有响应"));
+    assert.match(await popup.locator("#details").textContent(), /1\.1\.2/);
+    await popup.evaluate(() => {
+      chrome.tabs.sendMessage = async () => ({ version: "1.1.2", result: "已向可见图片层应用缩放",
+        wheelCount: 3, target: "div", dialogs: 1, photos: 1, active: true,
+        requestedScale: 2, computedScale: "2", initialWidth: 500, renderedWidth: 1000 });
+    });
+    await popup.locator("#refresh").click();
+    await popup.waitForFunction(() => document.getElementById("summary").textContent.includes("已向可见"));
+    assert.match(await popup.locator("#details").textContent(), /收到滚轮次数：3/);
+    assert.match(await popup.locator("#details").textContent(), /500 → 1000/);
+    await popup.close();
+    console.log("PASS (diagnostic popup): reports unavailable page scripts and displays running version, wheel count and actual image geometry.");
   } finally {
     await browser.close();
   }

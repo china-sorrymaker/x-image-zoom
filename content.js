@@ -1,14 +1,31 @@
 (() => {
   "use strict";
 
+  const version = "1.1.2";
   const marker = "data-x-image-zoom-extension";
   if (document.documentElement.hasAttribute(marker)) return;
-  document.documentElement.setAttribute(marker, "1.1.1");
+  document.documentElement.setAttribute(marker, version);
 
   let active = null;
   let drag = null;
   let suppressClickUntil = 0;
   let suppressClickScope = null;
+  const diagnostics = { wheelCount: 0, result: "尚未收到滚轮，请先在 X 大图上滚动", target: "—" };
+
+  function readStatus() {
+    return { version, ...diagnostics, dialogs: document.querySelectorAll('[role="dialog"]').length,
+      photos: [...document.querySelectorAll('[role="dialog"] img')].filter(isPhoto).length,
+      active: Boolean(active), requestedScale: active?.scale ?? 1,
+      computedScale: active ? getComputedStyle(active.surface).scale : "1",
+      renderedWidth: active ? Math.round(active.surface.getBoundingClientRect().width) : null,
+      initialWidth: active ? Math.round(active.rect.width) : null };
+  }
+  // 状态只通过扩展内部消息读取，不收集帖子、图片地址或账号信息。
+  if (globalThis.chrome?.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((message, sender, reply) => {
+      if (message?.type === "x-image-zoom-status") reply(readStatus());
+    });
+  }
 
   function isPhoto(image) {
     if (!(image instanceof HTMLImageElement)) return false;
@@ -21,21 +38,28 @@
     }
   }
 
-  function photoAt(event) {
+  function photoAt(event, report = false) {
+    function reject(reason) {
+      if (report) diagnostics.result = reason;
+      return null;
+    }
     const target = event.target;
-    if (!(target instanceof Element) || target.closest('button, a, article, video')) return null;
+    if (!(target instanceof Element)) return reject("滚轮目标不是网页元素");
+    const excluded = target.closest('button, a, article, video');
+    if (excluded) return reject(`滚轮目标在 ${excluded.tagName.toLowerCase()} 内，被现有规则排除`);
     const viewer = target.closest('[role="dialog"]');
-    if (!viewer) return null;
+    if (!viewer) return reject("滚轮目标不在已识别的 X 看图层内");
     const direct = target.closest("img") || target.closest('[role="img"], [data-testid="tweetPhoto"]')?.querySelector("img");
     if (isPhoto(direct) && !direct.closest("article")) return direct;
-    if (target.closest('[role="button"]')) return null;
+    if (target.closest('[role="button"]')) return reject("滚轮目标被识别为原生按钮");
     // X 可能在图片前铺透明手势层，按鼠标位置找它下面已显示的照片。
-    return [...viewer.querySelectorAll("img")].find(image => {
+    const matched = [...viewer.querySelectorAll("img")].find(image => {
       if (!isPhoto(image) || image.closest("article")) return false;
       const rect = image.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0 && event.clientX >= rect.left &&
         event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
-    }) || null;
+    });
+    return matched || reject("在鼠标位置没有找到符合条件的帖子图片");
   }
 
   function source(image) {
@@ -43,8 +67,12 @@
   }
 
   function surfaceFor(image) {
-    // X 使用 role=img 容器的背景层显示照片，内部的透明 img 只保留图片语义。
-    // 缩放整个图片容器，背景和透明 img 才会一起移动，普通 img 则直接缩放自身。
+    // 真实 X 的背景图片容器只有 aria-label，未必带 role=img。
+    // 按同级背景层的图片地址识别，不能依赖辅助功能属性或翻译后的标签文字。
+    const parent = image.parentElement;
+    const imageSource = image.currentSrc || image.src;
+    if (parent && [...parent.children].some(child => child !== image &&
+        getComputedStyle(child).backgroundImage.includes(imageSource))) return parent;
     return image.closest('[role="img"]') || image;
   }
 
@@ -54,9 +82,10 @@
     element.style.setProperty(name, value, "important");
   }
 
-  function reset() {
+  function reset(reason) {
     const state = active;
     if (!state) return;
+    if (typeof reason === "string") diagnostics.result = reason;
     active = null;
     suppressClickUntil = 0;
     suppressClickScope = null;
@@ -74,7 +103,7 @@
     if (!active.image.isConnected || !active.surface.isConnected || !active.viewer.isConnected || active.viewer.hidden || active.image.hidden ||
         !active.viewer.getClientRects().length || active.viewer.getAttribute("aria-hidden") === "true" ||
         source(active.image) !== active.source) {
-      reset();
+      reset("图片节点、图片源或看图层发生变化，缩放已自动复原");
       return false;
     }
     return true;
@@ -132,24 +161,37 @@
   }
 
   window.addEventListener("wheel", event => {
-    if (!event.deltaY || event.ctrlKey || event.metaKey || event.altKey) return;
+    diagnostics.wheelCount++;
+    diagnostics.target = event.target instanceof Element ?
+      `${event.target.tagName.toLowerCase()}${event.target.getAttribute("role") ? `[role=${event.target.getAttribute("role")}]` : ""}` : "非元素";
+    if (!event.deltaY || event.ctrlKey || event.metaKey || event.altKey) {
+      diagnostics.result = "横向滚动或带修饰键的滚轮，保留浏览器行为";
+      return;
+    }
     valid();
-    const image = photoAt(event);
+    const image = photoAt(event, true);
     if (!image) return;
-    if (active?.image !== image && event.deltaY > 0) return;
+    if (active?.image !== image && event.deltaY > 0) {
+      diagnostics.result = "图片尚未放大，请向上滚轮启动缩放";
+      return;
+    }
     const state = active?.image === image ? active : begin(image);
-    if (!state) return;
+    if (!state) {
+      diagnostics.result = `图片暂不能缩放：complete=${image.complete}，naturalWidth=${image.naturalWidth}，显示宽度=${Math.round(surfaceFor(image).getBoundingClientRect().width)}`;
+      return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
     const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1);
     const next = Math.max(1, Math.min(12, state.scale * Math.exp(-Math.max(-240, Math.min(240, delta)) * .002)));
-    if (next === 1) { reset(); return; }
+    if (next === 1) { reset("已通过滚轮缩回原始显示大小"); return; }
     const x = event.clientX - state.rect.left - state.rect.width / 2;
     const y = event.clientY - state.rect.top - state.rect.height / 2;
     state.x = x - (x - state.x) * next / state.scale;
     state.y = y - (y - state.y) * next / state.scale;
     state.scale = next;
     paint();
+    if (active) diagnostics.result = "已向可见图片层应用缩放";
   }, { capture: true, passive: false });
 
   window.addEventListener("pointerdown", event => {
